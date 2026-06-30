@@ -10,6 +10,7 @@ from app.tools import (
     analyze_devices,
     analyze_task_delays,
     apply_priority_automation,
+    calculate_operational_risk,
     create_automation_plan,
     find_outdated_devices,
     find_users_with_missing_data,
@@ -52,6 +53,22 @@ def _format_plan(result: dict[str, Any]) -> str:
     steps = "\n".join(f"{idx + 1}. {step}" for idx, step in enumerate(result.get("steps", [])))
     return f"{result.get('title', 'Plan automatyzacji')}\n{steps}\nEfekt: {result.get('estimated_impact')}"
 
+def _format_risk(result: dict[str, Any]) -> str:
+    areas = "\n".join(
+        f"{idx + 1}. {item['obszar']}: {item['ryzyko']} — {item['wartosc']} ({item['szczegoly']})"
+        for idx, item in enumerate(result.get("areas", []))
+    )
+
+    recommendations = "\n".join(
+        f"{idx + 1}. {item}" for idx, item in enumerate(result.get("recommendations", []))
+    )
+
+    return (
+        f"Ocena ryzyka operacyjnego: {result.get('score', 0)}/100, "
+        f"poziom: {result.get('level', 'brak danych')}.\n\n"
+        f"Najważniejsze obszary ryzyka:\n{areas}\n\n"
+        f"Rekomendowane działania:\n{recommendations}"
+    )
 
 class DemoAgent:
     """Simple deterministic agent for portfolio/demo purposes.
@@ -70,7 +87,28 @@ class DemoAgent:
         wants_devices = any(word in normalized for word in ["urząd", "bios", "system", "komputer", "aktualiz", "gwaranc"])
         wants_tasks = any(word in normalized for word in ["zad", "termin", "opóź", "proces", "spraw"])
         wants_automation = any(word in normalized for word in ["automatyz", "plan", "rekomend", "usprawn"])
+
+        wants_risk = any(
+            phrase in normalized
+            for phrase in [
+                "ryzyk",
+                "audyt",
+                "kondycja",
+                "przegląd",
+                "obszary wymagające",
+                "ocena operacyj",
+                "największy problem",
+                "największe problemy",
+            ]
+        )
+
         wants_apply = any(word in normalized for word in ["uruchom", "wykonaj", "zastosuj", "podnieś priorytet"])
+
+        if wants_risk:
+            result = calculate_operational_risk(session)
+            tools_used.append("calculate_operational_risk")
+            raw_results["operational_risk"] = result
+            parts.append(_format_risk(result))
 
         if wants_users:
             result = analyze_data_quality(session)

@@ -23,6 +23,7 @@ from app.analytics import (
 from app.database import get_engine, reset_db, session_scope
 from app.demo_data import seed_demo_data
 from app.models import AiReport, AutomationLog
+from app.tools import calculate_operational_risk
 
 st.set_page_config(page_title="OpsLab AI", page_icon="🤖", layout="wide")
 
@@ -56,8 +57,11 @@ with st.sidebar:
     st.code("Sprawdź urządzenia wymagające aktualizacji")
     st.code("Pokaż procesy po terminie i zaproponuj automatyzację")
     st.code("Uruchom automatyzację priorytetów dla zadań po terminie")
+    st.code("Zrób audyt ryzyk operacyjnych i wskaż priorytety")
 
-tab_dashboard, tab_agent, tab_data, tab_logs = st.tabs(["Dashboard", "Agent AI", "Dane", "Logi i raporty"])
+tab_dashboard, tab_agent, tab_risk, tab_data, tab_logs = st.tabs(
+    ["Dashboard", "Agent AI", "Audyt ryzyka", "Dane", "Logi i raporty"]
+)
 
 with tab_dashboard:
     with session_scope() as session:
@@ -65,6 +69,14 @@ with tab_dashboard:
         quality = data_quality_summary(session)
         devices = device_update_summary(session)
         tasks = task_delay_summary(session)
+        risk = calculate_operational_risk(session)
+
+    r1, r2, r3, r4 = st.columns(4)
+    r1.metric("Risk score", f"{risk['score']}/100")
+    r2.metric("Poziom ryzyka", risk["level"].capitalize())
+    r3.metric("Opóźnione zadania", f"{risk['overdue_rate']}%")
+    r4.metric("Urządzenia do uwagi", f"{risk['device_risk_rate']}%")
+    st.progress(int(risk["score"]))
 
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("Użytkownicy", summary["users_total"])
@@ -116,6 +128,49 @@ with tab_agent:
         st.code("\n".join(response.tools_used))
         with st.expander("Surowe wyniki narzędzi"):
             st.json(response.raw_results)
+
+with tab_risk:
+    with session_scope() as session:
+        risk = calculate_operational_risk(session)
+
+    st.subheader("Audyt ryzyka operacyjnego")
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Risk score", f"{risk['score']}/100")
+    c2.metric("Poziom", risk["level"].capitalize())
+    c3.metric("Problemy danych", f"{risk['data_quality_rate']}%")
+    c4.metric("Zadania po terminie", f"{risk['overdue_rate']}%")
+
+    st.progress(int(risk["score"]))
+
+    st.markdown("### Najważniejsze obszary ryzyka")
+    st.dataframe(pd.DataFrame(risk["areas"]), use_container_width=True)
+
+    st.markdown("### Rekomendacje")
+    for item in risk["recommendations"]:
+        st.write(f"- {item}")
+
+    report_md = "# OpsLab AI — audyt ryzyka operacyjnego\n\n"
+    report_md += f"**Risk score:** {risk['score']}/100\n\n"
+    report_md += f"**Poziom ryzyka:** {risk['level']}\n\n"
+
+    report_md += "## Obszary ryzyka\n"
+    for area in risk["areas"]:
+        report_md += (
+            f"- **{area['obszar']}** — {area['ryzyko']}: "
+            f"{area['wartosc']} ({area['szczegoly']})\n"
+        )
+
+    report_md += "\n## Rekomendacje\n"
+    for recommendation in risk["recommendations"]:
+        report_md += f"- {recommendation}\n"
+
+    st.download_button(
+        "Pobierz raport Markdown",
+        data=report_md,
+        file_name="opslab-ai-risk-audit.md",
+        mime="text/markdown",
+    )
 
 with tab_data:
     with session_scope() as session:

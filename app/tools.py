@@ -111,6 +111,93 @@ def apply_priority_automation(session: Session) -> dict[str, Any]:
     session.flush()
     return {"updated_tasks": updated, "log_id": log.id}
 
+def calculate_operational_risk(session: Session) -> dict[str, Any]:
+    quality = data_quality_summary(session)
+    devices = device_update_summary(session)
+    tasks = task_delay_summary(session)
+
+    total_users = max(int(quality.get("total_users", 0)), 1)
+    total_devices = max(int(devices.get("total_devices", 0)), 1)
+    total_tasks = max(int(tasks.get("total_tasks", 0)), 1)
+
+    data_quality_rate = min(quality.get("issues_total", 0) / total_users, 1)
+    device_risk_rate = min(devices.get("needs_attention", 0) / total_devices, 1)
+    overdue_rate = min(tasks.get("overdue_tasks", 0) / total_tasks, 1)
+    delay_risk_rate = min(tasks.get("avg_delay_days", 0) / 60, 1)
+
+    score = round(
+        data_quality_rate * 25
+        + device_risk_rate * 30
+        + overdue_rate * 35
+        + delay_risk_rate * 10,
+        1,
+    )
+
+    if score >= 70:
+        level = "wysokie"
+    elif score >= 40:
+        level = "średnie"
+    else:
+        level = "niskie"
+
+    by_team = tasks.get("by_team", {})
+    by_category = tasks.get("by_category", {})
+    top_team = max(by_team, key=by_team.get) if by_team else "brak danych"
+    top_category = max(by_category, key=by_category.get) if by_category else "brak danych"
+
+    areas = [
+        {
+            "obszar": "Procesy",
+            "ryzyko": "Zadania po terminie",
+            "wartosc": tasks.get("overdue_tasks", 0),
+            "szczegoly": f"Najwięcej opóźnień: {top_team}; kategoria: {top_category}",
+        },
+        {
+            "obszar": "Urządzenia",
+            "ryzyko": "Urządzenia wymagające uwagi",
+            "wartosc": devices.get("needs_attention", 0),
+            "szczegoly": f"BIOS: {devices.get('outdated_bios', 0)}, OS: {devices.get('unsupported_os', 0)}, gwarancja: {devices.get('expired_warranty', 0)}",
+        },
+        {
+            "obszar": "Jakość danych",
+            "ryzyko": "Braki i duplikaty danych użytkowników",
+            "wartosc": quality.get("issues_total", 0),
+            "szczegoly": "Weryfikacja e-maili, działów, telefonów i duplikatów",
+        },
+    ]
+
+    areas = sorted(areas, key=lambda item: item["wartosc"], reverse=True)
+
+    recommendations: list[str] = []
+
+    if tasks.get("overdue_tasks", 0) > 0:
+        recommendations.append(
+            "Ustawić automatyczne podnoszenie priorytetu dla zadań opóźnionych powyżej 14 dni."
+        )
+
+    if devices.get("needs_attention", 0) > 0:
+        recommendations.append(
+            "Generować tygodniową listę urządzeń z przestarzałym BIOS, niewspieranym OS lub wygasłą gwarancją."
+        )
+
+    if quality.get("issues_total", 0) > 0:
+        recommendations.append(
+            "Uruchomić cykliczną kontrolę jakości danych użytkowników i oznaczać rekordy wymagające poprawy."
+        )
+
+    if not recommendations:
+        recommendations.append("Nie wykryto wysokich ryzyk. Utrzymać monitoring metryk operacyjnych.")
+
+    return {
+        "score": score,
+        "level": level,
+        "data_quality_rate": round(data_quality_rate * 100, 1),
+        "device_risk_rate": round(device_risk_rate * 100, 1),
+        "overdue_rate": round(overdue_rate * 100, 1),
+        "avg_delay_days": tasks.get("avg_delay_days", 0),
+        "areas": areas,
+        "recommendations": recommendations,
+    }
 
 def save_ai_report(session: Session, prompt: str, summary: str, tools_used: list[str]) -> dict[str, Any]:
     report = AiReport(prompt=prompt, summary=summary, tools_used=", ".join(tools_used))
@@ -127,4 +214,5 @@ TOOL_REGISTRY = {
     "analyze_devices": analyze_devices,
     "create_automation_plan": create_automation_plan,
     "apply_priority_automation": apply_priority_automation,
+    "calculate_operational_risk": calculate_operational_risk,
 }
