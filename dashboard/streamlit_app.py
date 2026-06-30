@@ -136,16 +136,27 @@ with tab_logs:
         logs = session.query(AutomationLog).order_by(AutomationLog.created_at.desc()).limit(50).all()
         reports = session.query(AiReport).order_by(AiReport.created_at.desc()).limit(50).all()
 
+        # Konwersja obiektów SQLAlchemy do słowników wewnątrz aktywnej sesji.
+        # Dzięki temu Streamlit może bezpiecznie odświeżać widok po zamknięciu sesji.
+        logs_rows = [
+            {"czas": log.created_at, "akcja": log.action_name, "status": log.status, "szczegóły": log.details}
+            for log in logs
+        ]
+        reports_rows = [
+            {"czas": report.created_at, "polecenie": report.prompt, "narzędzia": report.tools_used, "podsumowanie": report.summary}
+            for report in reports
+        ]
+
     st.subheader("Logi automatyzacji")
-    logs_df = pd.DataFrame([
-        {"czas": log.created_at, "akcja": log.action_name, "status": log.status, "szczegóły": log.details}
-        for log in logs
-    ])
-    st.dataframe(logs_df, use_container_width=True)
+    if logs_rows:
+        logs_df = pd.DataFrame(logs_rows)
+        st.dataframe(logs_df, use_container_width=True)
+    else:
+        st.info("Brak logów automatyzacji. Uruchom agenta z poleceniem automatyzacji, aby utworzyć pierwszy log.")
 
     st.subheader("Raporty AI")
-    reports_df = pd.DataFrame([
-        {"czas": report.created_at, "polecenie": report.prompt, "narzędzia": report.tools_used, "podsumowanie": report.summary}
-        for report in reports
-    ])
-    st.dataframe(reports_df, use_container_width=True)
+    if reports_rows:
+        reports_df = pd.DataFrame(reports_rows)
+        st.dataframe(reports_df, use_container_width=True)
+    else:
+        st.info("Brak raportów AI. Uruchom agenta, aby utworzyć pierwszy raport.")

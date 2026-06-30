@@ -38,7 +38,7 @@ def reset_db(engine: Engine | None = None) -> Engine:
 
 def get_session_factory(engine: Engine | None = None) -> sessionmaker[Session]:
     engine = engine or init_db()
-    return sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    return sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, future=True)
 
 
 @contextmanager
