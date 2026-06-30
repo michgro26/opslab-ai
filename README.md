@@ -127,18 +127,6 @@ opslab-ai/
 pytest
 ```
 
-## Opis do CV
-
-```text
-OpsLab AI – stworzyłem demonstracyjną aplikację w Pythonie pokazującą wykorzystanie agenta AI do analizy danych operacyjnych, wykrywania problemów jakości danych oraz automatyzacji zadań IT. Projekt działa na syntetycznych danych generowanych lokalnie i wykorzystuje Streamlit, Pandas, SQLite, SQLAlchemy, FastAPI oraz mechanizm tool-calling. Aplikacja zawiera dashboard, historię automatyzacji, rekomendacje AI i testy jednostkowe.
-```
-
-## Opis na GitHub
-
-```text
-AI automation sandbox for operational data analysis, task prioritization and IT process simulation using synthetic data.
-```
-
 ## Uwaga
 
-Obecna wersja używa deterministycznego agenta demonstracyjnego, który nie wymaga klucza API do modelu językowego. Dzięki temu projekt można uruchomić od razu lokalnie. W kolejnej wersji można dodać integrację z OpenAI API albo lokalnym modelem przez Ollama.
+Obecna wersja używa deterministycznego agenta demonstracyjnego, który nie wymaga klucza API do modelu językowego. Dzięki temu projekt można uruchomić od razu lokalnie. 
