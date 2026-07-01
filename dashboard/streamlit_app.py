@@ -25,6 +25,56 @@ from app.demo_data import seed_demo_data
 from app.models import AiReport, AutomationLog
 from app.tools import calculate_operational_risk
 
+def risk_color(score: float) -> str:
+    if score >= 70:
+        return "#ff4b4b"  # czerwony
+    if score >= 40:
+        return "#f5c542"  # żółty
+    return "#2ecc71"      # zielony
+
+
+def risk_badge(label: str, score: float) -> str:
+    color = risk_color(score)
+    return f"""
+    <div style="
+        padding: 14px 18px;
+        border-radius: 12px;
+        background: {color}22;
+        border: 1px solid {color};
+        color: {color};
+        font-weight: 700;
+        font-size: 18px;
+        text-align: center;
+    ">
+        {label}
+    </div>
+    """
+
+
+def risk_level_badge(level: str) -> str:
+    normalized = level.lower()
+
+    if normalized == "wysokie":
+        color = "#ff4b4b"
+    elif normalized == "średnie":
+        color = "#f5c542"
+    else:
+        color = "#2ecc71"
+
+    return f"""
+    <span style="
+        display: inline-block;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: {color}22;
+        border: 1px solid {color};
+        color: {color};
+        font-weight: 700;
+    ">
+        {level.capitalize()}
+    </span>
+    """
+
 st.set_page_config(page_title="OpsLab AI", page_icon="🤖", layout="wide")
 
 
@@ -71,12 +121,51 @@ with tab_dashboard:
         tasks = task_delay_summary(session)
         risk = calculate_operational_risk(session)
 
+    st.markdown("### Ocena ryzyka operacyjnego")
+
     r1, r2, r3, r4 = st.columns(4)
-    r1.metric("Risk score", f"{risk['score']}/100")
-    r2.metric("Poziom ryzyka", risk["level"].capitalize())
-    r3.metric("Opóźnione zadania", f"{risk['overdue_rate']}%")
-    r4.metric("Urządzenia do uwagi", f"{risk['device_risk_rate']}%")
-    st.progress(int(risk["score"]))
+
+    with r1:
+        st.markdown(
+            risk_badge(f"Risk score<br>{risk['score']}/100", risk["score"]),
+            unsafe_allow_html=True,
+        )
+
+    with r2:
+        st.markdown("**Poziom ryzyka**")
+        st.markdown(
+            risk_level_badge(risk["level"]),
+            unsafe_allow_html=True,
+        )
+
+    with r3:
+        st.metric("Opóźnione zadania", f"{risk['overdue_rate']}%")
+
+    with r4:
+        st.metric("Urządzenia do uwagi", f"{risk['device_risk_rate']}%")
+
+    bar_color = risk_color(risk["score"])
+
+    st.markdown(
+        f"""
+        <div style="
+            width: 100%;
+            background: #262730;
+            border-radius: 999px;
+            height: 18px;
+            overflow: hidden;
+            margin-top: 12px;
+            margin-bottom: 24px;
+        ">
+            <div style="
+                width: {risk['score']}%;
+                background: {bar_color};
+                height: 18px;
+            "></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("Użytkownicy", summary["users_total"])
@@ -87,6 +176,7 @@ with tab_dashboard:
     c6.metric("Zadania po terminie", summary["overdue_tasks"])
 
     left, right = st.columns(2)
+
     with left:
         st.subheader("Problemy jakości danych")
         issues_df = pd.DataFrame(quality["issues"])
@@ -98,6 +188,7 @@ with tab_dashboard:
         st.bar_chart(os_df.set_index("OS"))
 
     left, right = st.columns(2)
+
     with left:
         st.subheader("Zadania po terminie według zespołu")
         team_df = pd.DataFrame(tasks["by_team"].items(), columns=["Zespół", "Liczba"])
@@ -136,15 +227,69 @@ with tab_risk:
     st.subheader("Audyt ryzyka operacyjnego")
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Risk score", f"{risk['score']}/100")
-    c2.metric("Poziom", risk["level"].capitalize())
-    c3.metric("Problemy danych", f"{risk['data_quality_rate']}%")
-    c4.metric("Zadania po terminie", f"{risk['overdue_rate']}%")
 
-    st.progress(int(risk["score"]))
+    with c1:
+        st.markdown(
+            risk_badge(f"Risk score<br>{risk['score']}/100", risk["score"]),
+            unsafe_allow_html=True,
+        )
+
+    with c2:
+        st.markdown("**Poziom ryzyka**")
+        st.markdown(
+            risk_level_badge(risk["level"]),
+            unsafe_allow_html=True,
+        )
+
+    with c3:
+        st.metric("Problemy danych", f"{risk['data_quality_rate']}%")
+
+    with c4:
+        st.metric("Zadania po terminie", f"{risk['overdue_rate']}%")
+
+    bar_color = risk_color(risk["score"])
+
+    st.markdown(
+        f"""
+        <div style="
+            width: 100%;
+            background: #262730;
+            border-radius: 999px;
+            height: 18px;
+            overflow: hidden;
+            margin-top: 12px;
+            margin-bottom: 24px;
+        ">
+            <div style="
+                width: {risk['score']}%;
+                background: {bar_color};
+                height: 18px;
+            "></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     st.markdown("### Najważniejsze obszary ryzyka")
-    st.dataframe(pd.DataFrame(risk["areas"]), use_container_width=True)
+
+    risk_areas_df = pd.DataFrame(risk["areas"])
+
+    def color_risk_rows(row):
+        value = row["wartosc"]
+
+        if value >= 300:
+            background = "background-color: rgba(255, 75, 75, 0.25)"
+        elif value >= 100:
+            background = "background-color: rgba(245, 197, 66, 0.25)"
+        else:
+            background = "background-color: rgba(46, 204, 113, 0.20)"
+
+        return [background for _ in row]
+
+    st.dataframe(
+        risk_areas_df.style.apply(color_risk_rows, axis=1),
+        use_container_width=True,
+    )
 
     st.markdown("### Rekomendacje")
     for item in risk["recommendations"]:
