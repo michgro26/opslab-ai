@@ -82,7 +82,8 @@ Przygotuj końcową odpowiedź dla użytkownika.
         "prompt": f"{system_prompt}\n\n{payload_prompt}",
         "stream": False,
         "options": {
-            "temperature": 0.2,
+        "temperature": 0.2,
+        "num_predict": 350,
         },
     }
 
@@ -94,7 +95,7 @@ Przygotuj końcową odpowiedź dla użytkownika.
             method="POST",
         )
 
-        with urllib.request.urlopen(request, timeout=90) as response:
+        with urllib.request.urlopen(request, timeout=240) as response:
             body = json.loads(response.read().decode("utf-8"))
 
         text = body.get("response", "").strip()
