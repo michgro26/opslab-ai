@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
-
+import os
 import pandas as pd
 import streamlit as st
 
@@ -108,6 +108,31 @@ with st.sidebar:
     st.code("Pokaż procesy po terminie i zaproponuj automatyzację")
     st.code("Uruchom automatyzację priorytetów dla zadań po terminie")
     st.code("Zrób audyt ryzyk operacyjnych i wskaż priorytety")
+
+    st.markdown("### Tryb LLM")
+
+    use_llm = st.toggle(
+        "Użyj lokalnego LLM przez Ollama",
+        value=os.getenv("OPSLAB_USE_LLM", "false").lower() in {"1", "true", "yes", "on"},
+    )
+
+    ollama_model = st.text_input(
+        "Model Ollama",
+        value=os.getenv("OPSLAB_OLLAMA_MODEL", "llama3.2"),
+        help="Wpisz nazwę modelu dostępnego lokalnie w Ollama, np. llama3.2.",
+    )
+
+    os.environ["OPSLAB_USE_LLM"] = "true" if use_llm else "false"
+    os.environ["OPSLAB_LLM_PROVIDER"] = "ollama"
+    os.environ["OPSLAB_OLLAMA_MODEL"] = ollama_model.strip() or "llama3.2"
+
+    if use_llm:
+        st.info(
+            "Tryb LLM jest włączony. Agent nadal wykonuje analizę narzędziami, "
+            "ale końcowy raport zostanie wygenerowany przez lokalny model Ollama."
+        )
+    else:
+        st.caption("Tryb LLM jest wyłączony. Aplikacja działa w pełni lokalnie bez modelu językowego.")
 
 tab_dashboard, tab_agent, tab_risk, tab_data, tab_logs = st.tabs(
     ["Dashboard", "Agent AI", "Audyt ryzyka", "Dane", "Logi i raporty"]

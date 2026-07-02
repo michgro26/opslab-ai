@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.llm_client import generate_llm_report, is_llm_enabled
 from app.tools import (
     analyze_data_quality,
     analyze_devices,
@@ -53,6 +54,7 @@ def _format_plan(result: dict[str, Any]) -> str:
     steps = "\n".join(f"{idx + 1}. {step}" for idx, step in enumerate(result.get("steps", [])))
     return f"{result.get('title', 'Plan automatyzacji')}\n{steps}\nEfekt: {result.get('estimated_impact')}"
 
+
 def _format_risk(result: dict[str, Any]) -> str:
     areas = "\n".join(
         f"{idx + 1}. {item['obszar']}: {item['ryzyko']} — {item['wartosc']} ({item['szczegoly']})"
@@ -70,11 +72,15 @@ def _format_risk(result: dict[str, Any]) -> str:
         f"Rekomendowane działania:\n{recommendations}"
     )
 
+
 class DemoAgent:
     """Simple deterministic agent for portfolio/demo purposes.
 
-    It does not require external API access. It routes a natural-language prompt to
+    It works without external API access. It routes a natural-language prompt to
     predefined tools and writes a report to the local SQLite database.
+
+    If OPSLAB_USE_LLM=true, it can additionally use a local Ollama model to
+    rewrite the deterministic result into a more natural decision-oriented report.
     """
 
     def run(self, session: Session, prompt: str) -> AgentResponse:
@@ -83,10 +89,25 @@ class DemoAgent:
         raw_results: dict[str, Any] = {}
         parts: list[str] = []
 
-        wants_users = any(word in normalized for word in ["użytk", "email", "e-mail", "dział", "dane", "jakość"])
-        wants_devices = any(word in normalized for word in ["urząd", "bios", "system", "komputer", "aktualiz", "gwaranc"])
-        wants_tasks = any(word in normalized for word in ["zad", "termin", "opóź", "proces", "spraw"])
-        wants_automation = any(word in normalized for word in ["automatyz", "plan", "rekomend", "usprawn"])
+        wants_users = any(
+            word in normalized
+            for word in ["użytk", "email", "e-mail", "dział", "dane", "jakość"]
+        )
+
+        wants_devices = any(
+            word in normalized
+            for word in ["urząd", "bios", "system", "komputer", "aktualiz", "gwaranc"]
+        )
+
+        wants_tasks = any(
+            word in normalized
+            for word in ["zad", "termin", "opóź", "proces", "spraw"]
+        )
+
+        wants_automation = any(
+            word in normalized
+            for word in ["automatyz", "plan", "rekomend", "usprawn"]
+        )
 
         wants_risk = any(
             phrase in normalized
@@ -94,6 +115,7 @@ class DemoAgent:
                 "ryzyk",
                 "audyt",
                 "kondycja",
+                "kondycj",
                 "przegląd",
                 "obszary wymagające",
                 "ocena operacyj",
@@ -102,7 +124,10 @@ class DemoAgent:
             ]
         )
 
-        wants_apply = any(word in normalized for word in ["uruchom", "wykonaj", "zastosuj", "podnieś priorytet"])
+        wants_apply = any(
+            word in normalized
+            for word in ["uruchom", "wykonaj", "zastosuj", "podnieś priorytet"]
+        )
 
         if wants_risk:
             result = calculate_operational_risk(session)
@@ -160,8 +185,40 @@ class DemoAgent:
                 raw_results[name] = result
                 parts.append(formatter(result))
 
-        summary = "\n\n".join(parts)
+        deterministic_summary = "\n\n".join(parts)
+
+        llm_result = generate_llm_report(
+            user_prompt=prompt,
+            tools_used=tools_used,
+            raw_results=raw_results,
+            deterministic_summary=deterministic_summary,
+        )
+
+        raw_results["llm"] = {
+            "enabled": llm_result.get("enabled", False),
+            "used": llm_result.get("used", False),
+            "provider": llm_result.get("provider"),
+            "model": llm_result.get("model"),
+            "error": llm_result.get("error"),
+        }
+
+        if llm_result.get("used"):
+            summary = llm_result["text"]
+        else:
+            summary = deterministic_summary
+
+            if is_llm_enabled():
+                summary += (
+                    "\n\nUwaga: tryb LLM był włączony, ale nie udało się użyć modelu. "
+                    "Aplikacja zwróciła wynik z deterministycznego agenta."
+                )
+
         report = save_ai_report(session, prompt, summary, tools_used)
         raw_results["saved_report"] = report
 
-        return AgentResponse(prompt=prompt, summary=summary, tools_used=tools_used, raw_results=raw_results)
+        return AgentResponse(
+            prompt=prompt,
+            summary=summary,
+            tools_used=tools_used,
+            raw_results=raw_results,
+        )
